@@ -30,11 +30,16 @@ st.markdown(
             padding: 1.25rem 1.35rem .7rem; margin-bottom: 1rem; }
         .section-heading { color: #17354d; font-size: 1.12rem; font-weight: 700; margin-bottom: .2rem; }
         .section-subtitle { color: #64748b; font-size: .88rem; margin-bottom: 1rem; }
-        .result-card { background: white; border: 1px solid #d9e8e8; border-radius: 18px;
-            padding: 1.5rem; margin-top: 1rem; }
-        .result-label { color: #526578; font-size: .9rem; font-weight: 600; }
-        .result-value { color: #126b66; font-size: clamp(2rem, 4vw, 2.8rem);
-            font-weight: 700; line-height: 1.2; margin: .35rem 0 .55rem; }
+        .result-inline { color: #526578; font-size: 1rem; font-weight: 600; margin: 0; text-align: center; }
+        .result-inline + .muted-note { text-align: center; }
+        /* Divider between the left (Age, Sex, BMI) and right (Smoker, Region) sections */
+        /* Drawn in the middle of the 4rem column gap (gap="large"), which is the form's centre */
+        .st-key-input_sections [data-testid="stColumn"]:nth-child(2) { position: relative; overflow: visible; }
+        .st-key-input_sections [data-testid="stColumn"]:nth-child(2)::before {
+            content: ""; position: absolute; left: -2rem; top: 0; bottom: 0; border-left: 1px solid #d9e2ec; }
+        /* Spread the Region options so the last one lines up with the bottom of the BMI box */
+        .st-key-region [role="radiogroup"] { gap: 0.7rem; }
+        .result-value { color: #126b66; font-size: 1.6rem; font-weight: 700; margin-left: .4rem; }
         .muted-note { color: #64748b; font-size: .82rem; }
         div.stButton > button, div[data-testid="stFormSubmitButton"] > button {
             background: #126b66; color: white; border: 0; border-radius: 10px;
@@ -48,6 +53,10 @@ st.markdown(
         div[data-testid="stMetric"] { background: #f7fafc; border: 1px solid #e4eaf1;
             padding: .8rem 1rem; border-radius: 12px; }
         .footer { color: #718096; font-size: .78rem; text-align: center; padding-top: 1.5rem; }
+        /* Slimmer top bar (Deploy / Share / star / GitHub / menu); default height is 3.75rem */
+        header[data-testid="stHeader"] { height: 2.00rem; min-height: 2.00rem; }
+        header[data-testid="stHeader"] [data-testid="stToolbar"] { top: 0; height: 2.00rem; align-items: center; }
+        header[data-testid="stHeader"] button { padding-top: 0; padding-bottom: 0; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -95,15 +104,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.sidebar:
-    st.markdown("## About this tool")
-    st.write("This demo estimates medical insurance charges from the personal and lifestyle details entered.")
-    st.divider()
-    st.markdown("### Input guide")
-    st.caption("BMI means body mass index.")
-    st.caption("Region encoding must match the mapping used when training the model.")
-    st.divider()
-    st.caption("For educational demonstration only. This is not an insurance quote, medical advice, or a guarantee of actual costs.")
 
 try:
     model, x_scaler, y_scaler = load_artifacts(artifact_versions())
@@ -123,18 +123,24 @@ if artifacts_loaded:
     
 
     with st.form("prediction_form"):
-        col1, col2 = st.columns(2)
+        # Keyed container so the CSS can draw a divider between the two input sections
+        with st.container(key="input_sections"):
+            col1, col2 = st.columns(2, gap="large")
         with col1:
             # Training data covers ages 18-64; the model cannot extrapolate beyond that
             age = st.slider("Age", min_value=18, max_value=64, value=40)
             sex = st.radio("Sex", list(SEX_MAP), horizontal=True)
-            bmi = st.number_input("BMI", min_value=10.0, max_value=60.0, value=30.0, step=0.1)
+            bmi = st.number_input("BMI (Enter values between 10 - 60)", min_value=10.0, max_value=60.0, value=30.0, step=0.1)
         with col2:
             smoker = st.radio("Smoker", list(SMOKER_MAP), horizontal=True)
-            region = st.selectbox("Region", list(REGION_MAP))
-            # Reserved spot under Region so the estimate shows without scrolling
+            # Single choice (the model takes exactly one region), stacked to fill the space beside BMI
+            region = st.radio("Region", list(REGION_MAP), key="region")
+        # Middle third of the form, so the button and result sit centered
+        button_col, result_col = st.columns(2, gap="large", vertical_alignment="center")
+        with button_col:
+            submitted = st.form_submit_button("Estimate charges", width="stretch")
+        with result_col:
             result_slot = st.empty()
-        submitted = st.form_submit_button("Estimate charges")
 
     if submitted:
         try:
@@ -150,11 +156,9 @@ if artifacts_loaded:
 
             result_slot.markdown(
                 f"""
-                <div class="result-card">
-                    <div class="result-label">Estimated annual medical insurance charges</div>
-                    <div class="result-value">${max(prediction, 0):,.2f}</div>
-                    <div class="muted-note">Model estimate, not an insurance quote.</div>
-                </div>
+                <div class="result-inline">Estimated annual charges:
+                    <span class="result-value">${max(prediction, 0):,.2f}</span></div>
+                
                 """,
                 unsafe_allow_html=True,
             )
